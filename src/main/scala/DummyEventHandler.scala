@@ -30,8 +30,8 @@ class DummyEventHandler(event: DummyEvent) {
     res <- UIO.effectTotal(decode[Record](event.body)).absolve
       .mapError(error => DummyFailure(s"Could not parse event $event. Exception: $error"))
       .flatMap(record => DummyRepo.add(record.key, record.value)
-        .foldM(error => ZIO.succeed(DummyFailure(s"Could not persist event $event. Exception: ${error}")),
-          _ => ZIO.succeed(DummySuccess("Event Persisted"))))
+        .foldM(error => UIO.succeed(DummyFailure(s"Could not persist event $event. Exception: ${error}")),
+          _ => UIO.succeed(DummySuccess("Event Persisted"))))
   } yield (res))
 
   /*val myApp = (for {
