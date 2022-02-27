@@ -9,4 +9,4 @@ phases:
       - sbt assembly
 artifacts:
   files:
-    - target/scala-2.13/amazon-zio-messing-assumbly-0.1.0-SNAPSHOT.jar
+    - target/scala-2.13/amazon-zio-messing-assembly-0.1.0-SNAPSHOT.jar
