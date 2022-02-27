@@ -7,6 +7,6 @@ phases:
   build:
     commands:
       - sbt assembly
-artificats:
+artifacts:
   files:
     - target/scala-2.13/amazon-zio-messing-assumbly-0.1.0-SNAPSHOT.jar
