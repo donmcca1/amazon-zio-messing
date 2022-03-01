@@ -2,6 +2,7 @@ package org.zio.amazon.messing
 
 import org.scanamo.generic.auto._
 import org.scanamo.{ScanamoZio, Table}
+import org.scanamo.syntax._
 import org.slf4j.LoggerFactory
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
@@ -11,16 +12,26 @@ case class Dummy(key: String, bollix: String)
 case class DbError(message: String, cause: Throwable)
 trait DummyRepo {
   def add(key: String, bollix: String): IO[DbError, Unit]
+  def get(key: String): IO[DbError, Dummy]
+  def getAll: IO[DbError, List[Dummy]]
 }
-case class DummyRepoLive() extends DummyRepo {
-  val logger = LoggerFactory.getLogger(getClass.getName)
+object DummyRepo {
+  def add(key: String, bollix: String): ZIO[Has[DummyRepo], DbError, Unit] = {
+    ZIO.serviceWith[DummyRepo](_.add(key, bollix))
+  }
 
-  val region = Region.EU_WEST_1
-  val client = DynamoDbAsyncClient.builder()
-    .region(region)
-    .build()
-  val scanamo = ScanamoZio(client)
-  val table = Table[Dummy]("Dummy")
+  def get(key: String): ZIO[Has[DummyRepo], DbError, Dummy] = {
+    ZIO.serviceWith[DummyRepo](_.get(key))
+  }
+
+  def getAll(): ZIO[Has[DummyRepo], DbError, List[Dummy]] = {
+    ZIO.serviceWith[DummyRepo](_.getAll)
+  }
+}
+
+class DummyRepoLive extends DummyRepo {
+  import DummyRepoLive._
+
   override def add(key: String, bollix: String): IO[DbError, Unit] = {
     (for {
       _ <- UIO.effectTotal(logger.info(s"Persisting a dummy with key: $key and bollix: $bollix"))
@@ -30,14 +41,50 @@ case class DummyRepoLive() extends DummyRepo {
         } yield res
       }
       _ <- UIO.effectTotal(logger.info(s"Persisted a dummy with key: $key and bollix: $bollix."))
-    } yield (res)).mapError(dynamoDbException => DbError(dynamoDbException.getMessage, dynamoDbException.getCause))
+    } yield res).mapError(dynamoDbException => DbError(dynamoDbException.getMessage, dynamoDbException.getCause))
+  }
+
+  override def get(key: String): IO[DbError, Dummy] = {
+    for {
+      _ <- UIO.effectTotal(logger.info(s"Retrieving dummy: $key, from repository"))
+      query <- scanamo.exec {
+        for {
+          res <- table.get("key" === key)
+        } yield res
+      }.mapError(dbEx => DbError(dbEx.getMessage, dbEx.getCause))
+      either <- if (query.nonEmpty) UIO.succeed(query.get) else IO.fail(DbError(s"Could not find dummy: $key", new RuntimeException))
+      result <- either match {
+        case Right(dummy) => UIO.succeed(dummy)
+        case Left(_) => IO.fail(DbError("dynamo read exception", new RuntimeException))
+      }
+      _ <- UIO.effectTotal(logger.info(s"Retrieved dummy from repo: $result"))
+    } yield result
+  }
+
+  override def getAll: IO[DbError, List[Dummy]] = {
+    (for {
+      _ <- UIO.effectTotal(logger.info("Retrieving all the dummies in the repo"))
+      res <- scanamo.exec {
+        for {
+          res <- table.scan()
+        } yield res
+      }
+      list <- ZIO.effect(res.filter(_.isRight).map(_.getOrElse(throw new RuntimeException)))
+      _ <- UIO.effectTotal(logger.info(s"Retrieved all the dummies from the repo: $list"))
+    } yield list).mapError(_ => DbError("unable to retrieve dummies from the db...", new RuntimeException))
   }
 }
 object DummyRepoLive {
+  val logger = LoggerFactory.getLogger(getClass.getName)
+
+  val region = Region.EU_WEST_1
+  val client = DynamoDbAsyncClient.builder()
+    .region(region)
+    .build()
+  val scanamo = ScanamoZio(client)
+  val table = Table[Dummy]("Dummy")
+
   val layer: ULayer[Has[DummyRepo]] = ZLayer.succeed(DummyRepoLive())
-}
-object DummyRepo {
-  def add(key: String, bollix: String): ZIO[Has[DummyRepo], DbError, Unit] = {
-    ZIO.serviceWith[DummyRepo](_.add(key, bollix))
-  }
+
+  def apply(): DummyRepoLive = new DummyRepoLive
 }
