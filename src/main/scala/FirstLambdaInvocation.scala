@@ -17,6 +17,7 @@ class FirstLambdaInvocation extends RequestHandler[APIGatewayProxyRequestEvent, 
   def handleRequest(event: APIGatewayProxyRequestEvent, context: Context): APIGatewayProxyResponseEvent = {
     logger.info("ENVIRONMENT VARIABLES: " + System.getenv().asScala.asJson)
     logger.info("CONTEXT: " + context.asJson)
+    logger.info(s"Event:: ${event.getHttpMethod} ${event.getPath}, ${event.getPathParameters}")
     val dummyEvent = event.getHttpMethod match {
       case "POST" => AddDummyEvent(event.getBody)
       case "GET" => event.getPath match {
