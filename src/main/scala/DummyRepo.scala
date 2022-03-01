@@ -12,7 +12,7 @@ case class Dummy(key: String, bollix: String)
 case class DbError(message: String, cause: Throwable)
 trait DummyRepo {
   def add(key: String, bollix: String): IO[DbError, Unit]
-  def get(key: String): IO[DbError, Dummy]
+  def get(key: String, bollixFinder: String): IO[DbError, Dummy]
   def getAll: IO[DbError, List[Dummy]]
 }
 object DummyRepo {
@@ -20,8 +20,8 @@ object DummyRepo {
     ZIO.serviceWith[DummyRepo](_.add(key, bollix))
   }
 
-  def get(key: String): ZIO[Has[DummyRepo], DbError, Dummy] = {
-    ZIO.serviceWith[DummyRepo](_.get(key))
+  def get(key: String, bollixFinder: String): ZIO[Has[DummyRepo], DbError, Dummy] = {
+    ZIO.serviceWith[DummyRepo](_.get(key, bollixFinder))
   }
 
   def getAll(): ZIO[Has[DummyRepo], DbError, List[Dummy]] = {
@@ -44,15 +44,15 @@ class DummyRepoLive extends DummyRepo {
     } yield res).mapError(dynamoDbException => DbError(dynamoDbException.getMessage, dynamoDbException.getCause))
   }
 
-  override def get(key: String): IO[DbError, Dummy] = {
+  override def get(key: String, bollixFinder: String): IO[DbError, Dummy] = {
     for {
-      _ <- UIO.effectTotal(logger.info(s"Retrieving dummy: $key, from repository"))
+      _ <- UIO.effectTotal(logger.info(s"Retrieving dummy: $key, and finder: $bollixFinder from repository"))
       query <- scanamo.exec {
         for {
-          res <- table.get("key" === key)
+          res <- table.get("key" === key and ("bollix" === bollixFinder))
         } yield res
       }.mapError(dbEx => DbError(dbEx.getMessage, dbEx.getCause))
-      either <- if (query.nonEmpty) UIO.succeed(query.get) else IO.fail(DbError(s"Could not find dummy: $key", new RuntimeException))
+      either <- if (query.nonEmpty) UIO.succeed(query.get) else IO.fail(DbError(s"Could not find dummy: $key, and finder: $bollixFinder", new RuntimeException))
       result <- either match {
         case Right(dummy) => UIO.succeed(dummy)
         case Left(_) => IO.fail(DbError("dynamo read exception", new RuntimeException))
