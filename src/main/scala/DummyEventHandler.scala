@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory
 import zio._
 sealed trait DummyEvent
 case object GetDummiesEvent extends DummyEvent
-case class GetDummyEvent(dummy: String) extends DummyEvent
+case class GetDummyEvent(key: String, dummy: String) extends DummyEvent
 case class AddDummyEvent(body: String) extends DummyEvent
 sealed trait DummyResponse
 case class DummySuccess(message: String) extends DummyResponse
@@ -38,7 +38,7 @@ class DummyEventHandler(event: DummyEvent) {
           .flatMap(record => DummyRepo.add(record.key, record.value)
             .foldM(error => UIO.succeed(DummyFailure(s"Could not persist event $event. Exception: ${error}")),
               _ => UIO.succeed(DummySuccess("Event Persisted"))))
-        case get: GetDummyEvent => DummyRepo.get(get.dummy).foldM(error => UIO.succeed(DummyFailure(s"Could not retrieve dummy: ${get.dummy}, excpetion: $error")),
+        case get: GetDummyEvent => DummyRepo.get(get.key, get.dummy).foldM(error => UIO.succeed(DummyFailure(s"Could not retrieve dummy: ${get.dummy}, excpetion: $error")),
           success => UIO.succeed(DummySuccess(success.toString)))
         case _: GetDummiesEvent.type => DummyRepo.getAll().foldM(error => UIO.succeed(DummyFailure(s"Could not retrieve dummies., exception: $error")),
           success => UIO.succeed(DummySuccess(success.toString())))

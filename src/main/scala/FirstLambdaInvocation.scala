@@ -22,7 +22,7 @@ class FirstLambdaInvocation extends RequestHandler[APIGatewayProxyRequestEvent, 
       case "POST" => AddDummyEvent(event.getBody)
       case "GET" => event.getPath match {
         case "/record" => GetDummiesEvent
-        case _ => GetDummyEvent(event.getPathParameters.get("dummy"))
+        case _ => GetDummyEvent(event.getPathParameters.get("dummy"), event.getQueryStringParameters.get("finder"))
       }
     }
     val response = DummyEventHandler(dummyEvent).handle()
